@@ -5,8 +5,10 @@ import android.content.pm.Signature
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
+import androidx.collection.LruCache
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.blankj.utilcode.util.ActivityUtils
 import com.blankj.utilcode.util.AppUtils
 import com.blankj.utilcode.util.AppUtils.AppInfo
@@ -14,6 +16,8 @@ import com.blankj.utilcode.util.FileIOUtils
 import com.blankj.utilcode.util.FileUtils
 import com.blankj.utilcode.util.PathUtils
 import com.blankj.utilcode.util.UriUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.security.AccessController.getContext
@@ -21,6 +25,7 @@ import java.security.PublicKey
 import java.security.cert.CertificateException
 import java.security.cert.CertificateFactory
 import java.security.interfaces.RSAPublicKey
+import java.util.LinkedList
 
 
 /**
@@ -28,7 +33,9 @@ import java.security.interfaces.RSAPublicKey
  * @date: 2023/3/9
  * @description:
  */
-class MainViewModel: ViewModel() {
+private const val TAG = "MainViewModel"
+class MainViewModel : ViewModel() {
+
 
     var md5 = ""
     var sha1 = ""
@@ -36,12 +43,38 @@ class MainViewModel: ViewModel() {
     var publicKey = mutableStateOf("")
     var search = mutableStateOf("")
     var signatures = mutableStateOf("")
-    var showDialog  = mutableStateOf(false)
-    private val allData = AppUtils.getAppsInfo()
-    var data = mutableStateOf(allData)
+    var showDialog = mutableStateOf(false)
+    private var allData = mutableListOf<AppInfo>()
+    var data = mutableStateOf(mutableListOf<AppInfo>())
     var selected = mutableStateOf<AppInfo?>(null)
 
-    fun setSearchText(s: String){
+    init {
+        allData = AppUtils.getAppsInfo()
+        sort()
+    }
+
+    fun sort(){
+        viewModelScope.launch(Dispatchers.Default) {
+            val get = Cache.get()
+
+            for (s in get) {
+
+                for ((index, appInfo) in allData.withIndex()) {
+                    if (appInfo.packageName == s) {
+                        allData.removeAt(index)
+                        allData.add(0, appInfo)
+                        break
+                    }
+                }
+            }
+
+            launch(Dispatchers.Main){
+                setSearchText(search.value)
+            }
+        }
+    }
+
+    fun setSearchText(s: String) {
         search.value = s
         val list = mutableListOf<AppInfo>()
         if (s.isEmpty()) {
@@ -49,7 +82,7 @@ class MainViewModel: ViewModel() {
             return
         }
         for (appInfo in allData) {
-            if (appInfo.name.contains(s)){
+            if (appInfo.name.contains(s)) {
                 list.add(appInfo)
             }
         }
@@ -58,6 +91,8 @@ class MainViewModel: ViewModel() {
 
     fun getSignatures() {
         selected.value?.let {
+            Cache.save(it.packageName)
+            sort()
             try {
                 // 获取第一个证书（默认情况下只有一个）
                 val appSignatures = AppUtils.getAppSignatures(it.packageName)

@@ -1,5 +1,6 @@
 package com.tang.signature
 
+import android.app.Dialog
 import android.graphics.drawable.BitmapDrawable
 import android.media.Image
 import android.os.Bundle
@@ -51,13 +52,9 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    fun geta(){
-
-    }
 }
 
-@Preview(showBackground = true)
+@Preview()
 @Composable
 fun Greeting() {
     val viewModel: MainViewModel = viewModel()
@@ -72,7 +69,7 @@ fun Greeting() {
                 Text("输入app名称")
             },
             singleLine = true,
-            onValueChange = {
+                onValueChange = {
                 viewModel.setSearchText(it)
             },
             modifier = Modifier
